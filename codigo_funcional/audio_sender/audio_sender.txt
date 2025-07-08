@@ -1,0 +1,87 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+class AudioSender extends StatefulWidget {
+  const AudioSender({super.key});
+
+  @override
+  State<AudioSender> createState() => _AudioSenderState();
+}
+
+class _AudioSenderState extends State<AudioSender> {
+  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
+  RawDatagramSocket? _socket;
+  StreamController<Uint8List>? _audioStreamController;
+
+  final String serverIP = '192.168.0.21'; // Cambia por la IP de tu portátil
+  final int serverPort = 50005;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await Permission.microphone.request();
+    await _recorder.openRecorder();
+    _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+  }
+
+  Future<void> _startStreaming() async {
+    _audioStreamController = StreamController<Uint8List>();
+
+    // Escucha lo que se graba y lo manda por UDP
+    _audioStreamController!.stream.listen((Uint8List data) {
+      _socket?.send(data, InternetAddress(serverIP), serverPort);
+    });
+
+    await _recorder.startRecorder(
+      codec: Codec.pcm16,
+      numChannels: 1,
+      sampleRate: 16000,
+      toStream: _audioStreamController!.sink,
+    );
+  }
+
+  Future<void> _stopStreaming() async {
+    await _recorder.stopRecorder();
+    await _audioStreamController?.close();
+    _audioStreamController = null;
+  }
+
+  @override
+  void dispose() {
+    _recorder.closeRecorder();
+    _socket?.close();
+    _audioStreamController?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Enviar Audio al Portátil')),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: _startStreaming,
+              child: Text('Comenzar envío'),
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _stopStreaming,
+              child: Text('Detener envío'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

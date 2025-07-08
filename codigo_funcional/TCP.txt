@@ -1,0 +1,147 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const TelefonilloApp());
+}
+
+class TelefonilloApp extends StatelessWidget {
+  const TelefonilloApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Telefonillo',
+      home: const TelefonilloHome(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class TelefonilloHome extends StatefulWidget {
+  const TelefonilloHome({super.key});
+
+  @override
+  State<TelefonilloHome> createState() => _TelefonilloHomeState();
+}
+
+class _TelefonilloHomeState extends State<TelefonilloHome> {
+  bool mostrarOpciones = false;
+  bool enLlamada = false;
+  Socket? _socket;
+
+  final String servidorIP = '172.20.10.3';
+  final int puerto = 12345;
+
+  // Conexión TCP
+  void conectarConServidorTCP() async {
+    try {
+      _socket = await Socket.connect(servidorIP, puerto);
+      print('✅ Conectado al servidor TCP');
+
+      _socket!.listen((data) {
+        final mensaje = String.fromCharCodes(data).trim();
+        print('📩 Mensaje recibido: $mensaje');
+
+        if (mensaje == 'TIMBRE') {
+          mostrarTimbre();
+        }
+      });
+    } catch (e) {
+      print('❌ Error conectando al servidor TCP: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error de conexión TCP: $e')),
+      );
+    }
+  }
+
+  void mostrarTimbre() {
+    setState(() {
+      mostrarOpciones = true;
+    });
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("¡Timbre!"),
+        content: const Text("Alguien ha tocado el telefonillo."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Aceptar"),
+          )
+        ],
+      ),
+    );
+  }
+
+  void abrirPuerta() {
+    if (_socket != null) {
+      _socket!.write("ABRIR\n");
+      print("🔓 Señal de abrir enviada al servidor.");
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("🚪 Puerta abierta")),
+    );
+  }
+
+  void iniciarComunicacion() {
+    setState(() {
+      enLlamada = true;
+    });
+  }
+
+  void colgar() {
+    setState(() {
+      enLlamada = false;
+      mostrarOpciones = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    _socket?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Telefonillo Inteligente")),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: conectarConServidorTCP,
+              child: const Text("🔌 Conectar con servidor TCP"),
+            ),
+            const SizedBox(height: 20),
+            if (mostrarOpciones && !enLlamada) ...[
+              ElevatedButton(
+                onPressed: abrirPuerta,
+                child: const Text("🔓 Abrir puerta"),
+              ),
+              ElevatedButton(
+                onPressed: iniciarComunicacion,
+                child: const Text("📞 Establecer comunicación"),
+              ),
+            ],
+            if (enLlamada) ...[
+              const Text("📡 Comunicación activa"),
+              ElevatedButton(
+                onPressed: colgar,
+                child: const Text("🔚 Colgar"),
+              ),
+              ElevatedButton(
+                onPressed: abrirPuerta,
+                child: const Text("🔓 Abrir puerta"),
+              ),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+}
