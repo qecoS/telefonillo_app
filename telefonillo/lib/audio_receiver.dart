@@ -4,48 +4,62 @@ import 'dart:typed_data';
 import 'package:flutter_sound/flutter_sound.dart';
 
 class AudioReceiver {
-  final FlutterSoundPlayer _player = FlutterSoundPlayer();
-  RawDatagramSocket? _socket;
-  StreamController<Uint8List>? _streamController;
+  final int listenPort;
 
-  final int listenPort = 50006; // Puerto donde escucha el móvil
+  late FlutterSoundPlayer _player;
+  late RawDatagramSocket _socket;
+  late StreamController<Uint8List> _audioStreamController;
+  late StreamSink<Uint8List> _uint8ListSink;
 
-  Future<void> start() async {
+  AudioReceiver(this.listenPort) {
+    _player = FlutterSoundPlayer();
+    _audioStreamController = StreamController<Uint8List>();
+    _uint8ListSink = _audioStreamController.sink;
+  }
+
+  Future<void> init() async {
+    // Abrimos el reproductor
     await _player.openPlayer();
-    _streamController = StreamController<Uint8List>();
 
+    // Empezamos a reproducir desde stream
     await _player.startPlayerFromStream(
-      //fromStream: _streamController!.stream,
       codec: Codec.pcm16,
       interleaved: true,
       numChannels: 1,
       sampleRate: 16000,
-      bufferSize: 3200,
+      bufferSize: 4096,
     );
 
+    // Escuchamos el stream para alimentar el player
+    _audioStreamController.stream.listen((buffer) {
+      _player.feedFromStream(buffer);
+    });
 
+    // Abrimos socket UDP para recibir
     _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, listenPort);
-    _socket!.listen((event) {
+    print("🎧 Escuchando en el puerto $listenPort...");
+  }
+
+  Future<void> startReceiving() async {
+    _socket.listen((event) {
       if (event == RawSocketEvent.read) {
-        final datagram = _socket!.receive();
+        final datagram = _socket.receive();
         if (datagram != null) {
-          _streamController?.add(datagram.data);
+          _uint8ListSink.add(datagram.data);
         }
       }
     });
   }
 
-  Future<void> stop() async {
+  Future<void> stopReceiving() async {
     await _player.stopPlayer();
-    _streamController?.close();
-    _streamController = null;
-    _socket?.close();
-    _socket = null;
+    await _player.closePlayer();
+
+    await _audioStreamController.close();
+    _socket.close();
   }
 
-  void dispose() {
-    _player.closePlayer();
-    _socket?.close();
-    _streamController?.close();
+  Future<void> dispose() async {
+    await stopReceiving();
   }
 }

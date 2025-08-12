@@ -9,7 +9,7 @@ RATE = 16000
 
 # Configuración del socket UDP
 UDP_IP = "0.0.0.0"
-UDP_PORT = 50005
+UDP_PORT = 50006
 
 # Inicializa PyAudio
 p = pyaudio.PyAudio()
