@@ -87,6 +87,7 @@ class _AudioSenderState extends State<AudioSender> {
         numChannels: 1,
         sampleRate: 8000,
         toStream: _audioStreamController!.sink,
+        bufferSize: 324,
       );
 
       await _player.openPlayer(); // Asegurar que el player esté abierto
@@ -94,6 +95,7 @@ class _AudioSenderState extends State<AudioSender> {
         codec: Codec.pcm16,
         numChannels: 1,
         sampleRate: 8000,
+        bufferSize: 324,
       );
 
       setState(() => _isCallActive = true);
