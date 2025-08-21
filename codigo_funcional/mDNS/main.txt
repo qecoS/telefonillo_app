@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'mDNS Discovery',
       theme: ThemeData(primarySwatch: Colors.blue),
-  home: const DiscoveryScreen(),
+      home: const DiscoveryScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

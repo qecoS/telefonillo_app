@@ -6,8 +6,8 @@ import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class AudioSender extends StatefulWidget {
-  const AudioSender({super.key});
-
+  final String serverIp;
+  const AudioSender({Key? key, required this.serverIp}) : super(key: key);
   @override
   State<AudioSender> createState() => _AudioSenderState();
 }
@@ -22,7 +22,13 @@ class _AudioSenderState extends State<AudioSender> {
   bool _isTCPConnected = false;
 
   // Configuración de red
-  final String _serverIP = '10.136.144.190';
+  late final String _serverIP;
+  int _audioSeq = 0;
+  @override
+  void initState() {
+    super.initState();
+    _serverIP = widget.serverIp;
+  }
   final int _tcpPort = 12345;
   final int _udpPort = 12345;
 
@@ -59,8 +65,19 @@ class _AudioSenderState extends State<AudioSender> {
       _audioStreamController = StreamController<Uint8List>();
       _audioStreamController!.stream.listen((data) {
         if (_udpSocket != null) {
-          _udpSocket!.send(data, InternetAddress(_serverIP), _udpPort);
-          print('Enviados ${data.length} bytes por UDP');
+          // Empaquetar audio con cabecera igual que el script Python
+          final int packetType = 0; // AUDIO_PACKAGE
+          final int timestamp = DateTime.now().millisecondsSinceEpoch;
+          final int length = data.length;
+          final header = BytesBuilder();
+          header.add([packetType]); // uint8
+          header.add(_intToBytes(_audioSeq, 4)); // uint32
+          header.add(_intToBytes(timestamp, 8)); // uint64
+          header.add(_intToBytes(length, 2)); // uint16
+          final packet = Uint8List.fromList(header.toBytes() + data);
+          _udpSocket!.send(packet, InternetAddress(_serverIP), _udpPort);
+          _audioSeq++;
+          print('Enviados ${data.length} bytes por UDP (con cabecera)');
         }
       });
 
@@ -125,6 +142,15 @@ class _AudioSenderState extends State<AudioSender> {
     );
   }
 
+  // Utilidad para convertir int a bytes little-endian
+  List<int> _intToBytes(int value, int bytes) {
+    final result = <int>[];
+    for (int i = 0; i < bytes; i++) {
+      result.add((value >> (8 * i)) & 0xFF);
+    }
+    return result;
+  }
+
   @override
   void dispose() {
     _endCall();
@@ -136,33 +162,30 @@ class _AudioSenderState extends State<AudioSender> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Control de Llamada')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: _isTCPConnected ? null : _connectTCP,
-              child: Text(_isTCPConnected ? "Conectado TCP" : "Conectar TCP"),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            onPressed: _isTCPConnected ? null : _connectTCP,
+            child: Text(_isTCPConnected ? "Conectado TCP" : "Conectar TCP"),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _isTCPConnected && !_isCallActive ? _startCall : null,
+            child: const Text("Iniciar Llamada"),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _isCallActive ? _endCall : null,
+            child: const Text("Finalizar Llamada"),
+          ),
+          if (_isCallActive)
+            const Padding(
+              padding: EdgeInsets.only(top: 20),
+              child: Text("Llamada en curso...", style: TextStyle(color: Colors.green)),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _isTCPConnected && !_isCallActive ? _startCall : null,
-              child: const Text("Iniciar Llamada"),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _isCallActive ? _endCall : null,
-              child: const Text("Finalizar Llamada"),
-            ),
-            if (_isCallActive)
-              const Padding(
-                padding: EdgeInsets.only(top: 20),
-                child: Text("Llamada en curso...", style: TextStyle(color: Colors.green)),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
