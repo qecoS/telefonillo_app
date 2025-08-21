@@ -122,6 +122,8 @@ class _AudioSenderState extends State<AudioSender> {
     }
   }
 
+  
+
   Future<void> _initUDP() async {
     try {
       _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, _udpPort);
@@ -129,7 +131,10 @@ class _AudioSenderState extends State<AudioSender> {
         if (event == RawSocketEvent.read) {
           final datagram = _udpSocket?.receive();
           if (datagram != null) {
-            _player.feedUint8FromStream(datagram.data);
+            final audioData = _parseAudioPacket(datagram.data);
+            if (audioData != null) {
+              _player.feedUint8FromStream(audioData);
+            }
           }
         }
       });
@@ -142,6 +147,59 @@ class _AudioSenderState extends State<AudioSender> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message))
     );
+  }
+
+  Uint8List? _parseAudioPacket(Uint8List packet) {
+    try {
+      // Header structure (15 bytes total):
+      // - packetType: 1 byte (uint8)
+      // - audioSeq: 4 bytes (uint32)
+      // - timestamp: 8 bytes (uint64) 
+      // - length: 2 bytes (uint16)
+      // - audioData: remaining bytes
+      
+      if (packet.length < 15) {
+        print('Packet too small: ${packet.length} bytes');
+        return null;
+      }
+      
+      // Extract header fields
+      final packetType = packet[0];
+      final audioSeq = _bytesToInt(packet.sublist(1, 5));
+      final timestamp = _bytesToInt(packet.sublist(5, 13));
+      final length = _bytesToInt(packet.sublist(13, 15));
+      
+      // Validate packet
+      if (packetType != 0) {
+        print('Invalid packet type: $packetType');
+        return null;
+      }
+      
+      if (packet.length < 15 + length) {
+        print('Packet length mismatch. Expected: ${15 + length}, Got: ${packet.length}');
+        return null;
+      }
+      
+      // Extract audio data (skip 15-byte header)
+      final audioData = packet.sublist(15, 15 + length);
+      
+      print('Received audio packet - Seq: $audioSeq, Length: $length bytes');
+      return audioData;
+      
+    } 
+    catch (e) {
+      print('Error parsing packet: $e');
+      return null;
+    }
+  }
+
+  // Utilidad para convertir bytes a int (little-endian)
+  int _bytesToInt(Uint8List bytes) {
+    int result = 0;
+    for (int i = 0; i < bytes.length; i++) {
+      result |= bytes[i] << (8 * i);
+    }
+    return result;
   }
 
   // Utilidad para convertir int a bytes little-endian
