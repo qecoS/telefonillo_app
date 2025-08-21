@@ -49,19 +49,31 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     final MDnsClient client = MDnsClient();
     _mdnsClient = client;
     await client.start();
+    bool found = false;
     try {
       await for (IPAddressResourceRecord record in client.lookup<IPAddressResourceRecord>(
           ResourceRecordQuery.addressIPv4('telrem.local'))) {
+        found = true;
         setState(() {
           telremIp = record.address.address;
+          connectionStatus = 'IP encontrada: ${record.address.address}';
         });
-        // Intentar conectar por TCP
+        // Intentar conectar automáticamente por TCP
         try {
-          final socket = await Socket.connect(record.address, 12345);
+          final socket = await Socket.connect(record.address, 12345, timeout: const Duration(seconds: 3));
           setState(() {
             connectionStatus = 'Conectado a TelRem en ${socket.remoteAddress.address}:${socket.remotePort}';
           });
           socket.destroy();
+          // Navegar automáticamente a la pantalla de video/audio
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VideoAudioScreen(serverIp: record.address.address),
+              ),
+            );
+          }
         } catch (e) {
           setState(() {
             connectionStatus = 'No se pudo conectar a TelRem: $e';
@@ -69,7 +81,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         }
         break; // Solo el primer resultado
       }
-      if (telremIp == null) {
+      if (!found) {
         setState(() {
           connectionStatus = 'No se encontró telrem.local en la red.';
         });
@@ -102,12 +114,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Buscar TelRem por mDNS'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isScanning ? null : _resolveTelremHost,
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -123,21 +129,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    if (telremIp != null) ...[
-                      Text('IP encontrada: $telremIp', style: const TextStyle(fontSize: 18)),
-                      const SizedBox(height: 16),
+                    if (telremIp == null)
                       ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => VideoAudioScreen(serverIp: telremIp!),
-                            ),
-                          );
-                        },
-                        child: const Text('Conectar a Video + Audio'),
+                        onPressed: _resolveTelremHost,
+                        child: const Text('Reintentar búsqueda'),
                       ),
-                    ],
                     const SizedBox(height: 16),
                     Text(connectionStatus, style: const TextStyle(fontSize: 16)),
                   ],
@@ -145,11 +141,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               ),
             ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _isScanning ? null : _resolveTelremHost,
-        tooltip: 'Buscar TelRem',
-        child: const Icon(Icons.search),
       ),
     );
   }

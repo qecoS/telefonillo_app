@@ -47,14 +47,14 @@ class _AudioSenderState extends State<AudioSender> {
     }
   }
 
-  Future<void> _startCall() async {
+  Future<void> _startCallAndSendTCP() async {
     if (!_isTCPConnected) {
       _showError("Primero conéctate por TCP");
       return;
     }
 
     try {
-      // 1. Enviar señal de inicio
+      // 1. Enviar señal de inicio (0) por TCP y flush
       _tcpSocket?.add(Uint8List.fromList([0]));
       await _tcpSocket?.flush();
 
@@ -95,7 +95,6 @@ class _AudioSenderState extends State<AudioSender> {
         codec: Codec.pcm16,
         numChannels: 1,
         sampleRate: 8000,
-        bufferSize: 324,
       );
 
       setState(() => _isCallActive = true);
@@ -104,9 +103,9 @@ class _AudioSenderState extends State<AudioSender> {
     }
   }
 
-  Future<void> _endCall() async {
+  Future<void> _endCallAndSendTCP() async {
     try {
-      // 1. Enviar señal de fin
+      // 1. Enviar señal de fin (1) por TCP y flush
       _tcpSocket?.add(Uint8List.fromList([1]));
       await _tcpSocket?.flush();
 
@@ -119,6 +118,17 @@ class _AudioSenderState extends State<AudioSender> {
       setState(() => _isCallActive = false);
     } catch (e) {
       print("Error al finalizar: $e");
+    }
+  }
+
+  Future<void> _sendOpenCommand() async {
+    try {
+      // Enviar '7' por TCP y flush
+      _tcpSocket?.add(Uint8List.fromList([7]));
+      await _tcpSocket?.flush();
+      _showError("Comando 'abrir' enviado");
+    } catch (e) {
+      _showError("Error al enviar 'abrir': $e");
     }
   }
 
@@ -213,7 +223,7 @@ class _AudioSenderState extends State<AudioSender> {
 
   @override
   void dispose() {
-    _endCall();
+  _endCallAndSendTCP();
     _tcpSocket?.close();
     _recorder.closeRecorder();
     _player.closePlayer();
@@ -232,13 +242,18 @@ class _AudioSenderState extends State<AudioSender> {
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: _isTCPConnected && !_isCallActive ? _startCall : null,
+            onPressed: _isTCPConnected && !_isCallActive ? _startCallAndSendTCP : null,
             child: const Text("Iniciar Llamada"),
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: _isCallActive ? _endCall : null,
+            onPressed: _isCallActive ? _endCallAndSendTCP : null,
             child: const Text("Finalizar Llamada"),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _isTCPConnected ? _sendOpenCommand : null,
+            child: const Text("Abrir"),
           ),
           if (_isCallActive)
             const Padding(
