@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 import 'dart:io';
 import 'video_audio.dart';
+import 'menu_screen.dart';
 
 void main() => runApp(const MDNSDiscoveryApp());
 
@@ -65,12 +66,12 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             connectionStatus = 'Conectado a TelRem en ${socket.remoteAddress.address}:${socket.remotePort}';
           });
           socket.destroy();
-          // Navegar automáticamente a la pantalla de video/audio
+          // Navegar automáticamente al menú principal
           if (mounted) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => VideoAudioScreen(serverIp: record.address.address),
+                builder: (context) => MenuScreen(serverIp: record.address.address),
               ),
             );
           }

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'sync_state.dart';
 
 class VideoReceiver extends StatefulWidget {
   final int listenPort;
@@ -11,6 +12,8 @@ class VideoReceiver extends StatefulWidget {
   State<VideoReceiver> createState() => _VideoReceiverState();
 }
 class _VideoReceiverState extends State<VideoReceiver> {
+  // Umbral de sincronización en ms
+  static const int syncThresholdMs = 100;
   RawDatagramSocket? _videoSocket;
   final ValueNotifier<Uint8List?> _lastFrameNotifier = ValueNotifier(null);
 
@@ -42,7 +45,7 @@ class _VideoReceiverState extends State<VideoReceiver> {
     final packetType = data[0];
     if (packetType != 1) return; // 1 = VIDEO_PACKAGE
     final frameId = _bytesToInt(data.sublist(1, 5));
-    // timestamp (8 bytes) no usado aquí
+    final frameTimestamp = _bytesToInt(data.sublist(5, 13));
     final length = _bytesToInt(data.sublist(13, 15));
     final packetSeq = _bytesToInt(data.sublist(15, 17));
     final totalPackets = _bytesToInt(data.sublist(17, 19));
@@ -58,7 +61,13 @@ class _VideoReceiverState extends State<VideoReceiver> {
       for (int i = 0; i < totalPackets; i++) {
         frameData.addAll(_videoFrames[frameId]![i]!);
       }
-      _lastFrameNotifier.value = Uint8List.fromList(frameData);
+      // Sincronización AV: solo mostrar si el frame está cerca del último audio
+      if (lastAudioTimestamp != null && (frameTimestamp - lastAudioTimestamp!).abs() > syncThresholdMs) {
+        // Descartar frame desincronizado
+        print('Frame de vídeo descartado por desincronización: Δt = ${(frameTimestamp - lastAudioTimestamp!).abs()} ms');
+      } else {
+        _lastFrameNotifier.value = Uint8List.fromList(frameData);
+      }
       _videoFrames.remove(frameId);
       _totalPackets.remove(frameId);
     }

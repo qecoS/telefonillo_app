@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'sync_state.dart';
 
 class AudioSender extends StatefulWidget {
   final String serverIp;
@@ -13,6 +14,12 @@ class AudioSender extends StatefulWidget {
 }
 
 class _AudioSenderState extends State<AudioSender> {
+  // Buffer para paquetes de audio recibidos
+  final List<Uint8List> _audioBuffer = [];
+  Timer? _audioPlayTimer;
+  static const int audioPlayIntervalMs = 40;
+  // ...existing code...
+  // Usa la variable global lastAudioTimestamp de sync_state.dart
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   final FlutterSoundPlayer _player = FlutterSoundPlayer();
   RawDatagramSocket? _udpSocket;
@@ -143,9 +150,23 @@ class _AudioSenderState extends State<AudioSender> {
           if (datagram != null) {
             final audioData = _parseAudioPacket(datagram.data);
             if (audioData != null) {
-              _player.feedUint8FromStream(audioData);
+              // Añadir al buffer
+              _audioBuffer.add(audioData);
+              // Limitar tamaño del buffer para evitar acumulación excesiva
+              if (_audioBuffer.length > 10) {
+                _audioBuffer.removeRange(0, _audioBuffer.length - 10);
+              }
             }
           }
+        }
+      });
+      // Iniciar temporizador para reproducir audio cada 20ms
+  _audioPlayTimer = Timer.periodic(Duration(milliseconds: audioPlayIntervalMs), (timer) {
+        if (_audioBuffer.isNotEmpty) {
+          // Reproducir el paquete más reciente y vaciar el buffer
+          final toPlay = _audioBuffer.removeLast();
+          _audioBuffer.clear();
+          _player.feedUint8FromStream(toPlay);
         }
       });
     } catch (e) {
@@ -176,7 +197,9 @@ class _AudioSenderState extends State<AudioSender> {
       // Extract header fields
       final packetType = packet[0];
       final audioSeq = _bytesToInt(packet.sublist(1, 5));
-      final timestamp = _bytesToInt(packet.sublist(5, 13));
+  final timestamp = _bytesToInt(packet.sublist(5, 13));
+  // Guardar timestamp global para sincronización AV
+  lastAudioTimestamp = timestamp;
       final length = _bytesToInt(packet.sublist(13, 15));
       
       // Validate packet
@@ -224,10 +247,11 @@ class _AudioSenderState extends State<AudioSender> {
   @override
   void dispose() {
   _endCallAndSendTCP();
-    _tcpSocket?.close();
-    _recorder.closeRecorder();
-    _player.closePlayer();
-    super.dispose();
+  _audioPlayTimer?.cancel();
+  _tcpSocket?.close();
+  _recorder.closeRecorder();
+  _player.closePlayer();
+  super.dispose();
   }
 
   @override
