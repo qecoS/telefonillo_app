@@ -3,6 +3,7 @@ import 'package:multicast_dns/multicast_dns.dart';
 import 'dart:io';
 import 'video_audio.dart';
 import 'menu_screen.dart';
+import 'wifi_provision_screen.dart';
 
 void main() => runApp(const MDNSDiscoveryApp());
 
@@ -131,9 +132,29 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (telremIp == null)
-                      ElevatedButton(
-                        onPressed: _resolveTelremHost,
-                        child: const Text('Reintentar búsqueda'),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton(
+                            onPressed: _resolveTelremHost,
+                            child: const Text('Reintentar búsqueda'),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => WifiProvisionScreen(),
+                                ),
+                              ).then((_) {
+                                // Al volver del aprovisionamiento, intentar discovery de nuevo
+                                _resolveTelremHost();
+                              });
+                            },
+                            child: const Text('Aprovisionar WiFi'),
+                          ),
+                        ],
                       ),
                     const SizedBox(height: 16),
                     Text(connectionStatus, style: const TextStyle(fontSize: 16)),

@@ -27,9 +27,9 @@ class _WifiProvisionScreenState extends State<WifiProvisionScreen> {
       provisionMsg = null;
     });
     try {
-      // Usar siempre la IP fija 192.168.4.1 para el provisioning
+      // Usar siempre la IP fija 192.168.4.1 para el provisionings
       final url = Uri.parse('http://192.168.4.1/scan');
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      final response = await http.get(url).timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List<dynamic> nets = data['networks'] ?? [];
