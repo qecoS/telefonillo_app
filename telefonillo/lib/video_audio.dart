@@ -1,11 +1,12 @@
-
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'video_receiver.dart';
 import 'audio_sender.dart';
 
 class VideoAudioScreen extends StatelessWidget {
 	final String serverIp;
-  const VideoAudioScreen({Key? key, required this.serverIp}) : super(key: key);
+	final Socket? tcpSocket;
+	const VideoAudioScreen({Key? key, required this.serverIp, this.tcpSocket}) : super(key: key);
 
 	@override
 	Widget build(BuildContext context) {
@@ -22,7 +23,7 @@ class VideoAudioScreen extends StatelessWidget {
 					// Controles de audio en la parte inferior
 					Expanded(
 						flex: 2,
-						child: AudioSender(serverIp: serverIp),
+						child: AudioSender(serverIp: serverIp, tcpSocket: tcpSocket),
 					),
 				],
 			),

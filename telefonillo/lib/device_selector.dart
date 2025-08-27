@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 import 'dart:io';
-import 'video_audio.dart';
 import 'menu_screen.dart';
 import 'wifi_provision_screen.dart';
 
@@ -64,15 +63,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         try {
           final socket = await Socket.connect(record.address, 12345, timeout: const Duration(seconds: 3));
           setState(() {
-            connectionStatus = 'Conectado a TelRem en ${socket.remoteAddress.address}:${socket.remotePort}';
+            connectionStatus = 'Conectado a TelRem en \\${socket.remoteAddress.address}:\\${socket.remotePort}';
           });
-          socket.destroy();
-          // Navegar automáticamente al menú principal
+          // Navegar automáticamente al menú principal y pasar el socket
           if (mounted) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => MenuScreen(serverIp: record.address.address),
+                builder: (context) => MenuScreen(serverIp: record.address.address, tcpSocket: socket),
               ),
             );
           }
@@ -115,32 +113,53 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Buscar TelRem por mDNS'),
+        title: const Text('Buscar ESP'),
       ),
-      body: Column(
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text('Buscando IP de telrem.local y conectando por TCP al puerto 12345.'),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFe0eafc), Color(0xFFcfdef3)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          if (_isScanning)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
-          else
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+        ),
+        child: Center(
+          child: Card(
+            elevation: 8,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Buscando ESP-32',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_isScanning)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(),
+                    )
+                  else ...[
                     if (telremIp == null)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          ElevatedButton(
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.refresh),
                             onPressed: _resolveTelremHost,
-                            child: const Text('Reintentar búsqueda'),
+                            label: const Text('Reintentar búsqueda'),
+                            style: ElevatedButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
                           ),
-                          const SizedBox(width: 16),
-                          ElevatedButton(
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.wifi),
                             onPressed: () {
                               Navigator.push(
                                 context,
@@ -152,17 +171,23 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                 _resolveTelremHost();
                               });
                             },
-                            child: const Text('Aprovisionar WiFi'),
+                            label: const Text('Aprovisionar WiFi'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blueAccent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
                           ),
                         ],
                       ),
                     const SizedBox(height: 16),
                     Text(connectionStatus, style: const TextStyle(fontSize: 16)),
                   ],
-                ),
+                ],
               ),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }

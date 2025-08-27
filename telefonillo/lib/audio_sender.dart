@@ -3,12 +3,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
-import 'package:permission_handler/permission_handler.dart';
+// import 'package:permission_handler/permission_handler.dart'; // Ya no se usa
 import 'sync_state.dart';
 
 class AudioSender extends StatefulWidget {
   final String serverIp;
-  const AudioSender({Key? key, required this.serverIp}) : super(key: key);
+  final Socket? tcpSocket;
+  const AudioSender({Key? key, required this.serverIp, this.tcpSocket}) : super(key: key);
   @override
   State<AudioSender> createState() => _AudioSenderState();
 }
@@ -18,15 +19,13 @@ class _AudioSenderState extends State<AudioSender> {
   final List<Uint8List> _audioBuffer = [];
   Timer? _audioPlayTimer;
   static const int audioPlayIntervalMs = 40;
-  // ...existing code...
-  // Usa la variable global lastAudioTimestamp de sync_state.dart
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   final FlutterSoundPlayer _player = FlutterSoundPlayer();
   RawDatagramSocket? _udpSocket;
-  Socket? _tcpSocket; 
+  Socket? _tcpSocket;
   StreamController<Uint8List>? _audioStreamController;
   bool _isCallActive = false;
-  bool _isTCPConnected = false;
+  bool _isTCPConnected = true;
 
   // Configuración de red
   late final String _serverIP;
@@ -35,24 +34,12 @@ class _AudioSenderState extends State<AudioSender> {
   void initState() {
     super.initState();
     _serverIP = widget.serverIp;
+    _tcpSocket = widget.tcpSocket;
   }
-  final int _tcpPort = 12345;
+  // final int _tcpPort = 12345; // Ya no se usa
   final int _udpPort = 12345;
 
-  Future<void> _connectTCP() async {
-    try {
-      await Permission.microphone.request(); // Solicitar permiso primero
-      _tcpSocket = await Socket.connect(_serverIP, _tcpPort, timeout: const Duration(seconds: 3));
-      _tcpSocket?.listen(
-        (data) => print('Datos TCP recibidos: $data'),
-        onError: (error) => _showError("Error TCP: $error"),
-        onDone: () => print('Conexión TCP cerrada'),
-      );
-      setState(() => _isTCPConnected = true);
-    } catch (e) {
-      _showError("Error TCP: ${e.toString()}");
-    }
-  }
+  // Eliminada la función _connectTCP, ya no es necesaria
 
   Future<void> _startCallAndSendTCP() async {
     if (!_isTCPConnected) {
@@ -195,33 +182,25 @@ class _AudioSenderState extends State<AudioSender> {
       }
       
       // Extract header fields
-      final packetType = packet[0];
-      final audioSeq = _bytesToInt(packet.sublist(1, 5));
+  final packetType = packet[0];
+  // final audioSeq = _bytesToInt(packet.sublist(1, 5)); // No se usa
   final timestamp = _bytesToInt(packet.sublist(5, 13));
-  // Guardar timestamp global para sincronización AV
-  lastAudioTimestamp = timestamp;
+      // Guardar timestamp global para sincronización AV
+      lastAudioTimestamp = timestamp;
       final length = _bytesToInt(packet.sublist(13, 15));
-      
       // Validate packet
       if (packetType != 0) {
-        print('Invalid packet type: $packetType');
         return null;
       }
-      
       if (packet.length < 15 + length) {
-        print('Packet length mismatch. Expected: ${15 + length}, Got: ${packet.length}');
         return null;
       }
-      
       // Extract audio data (skip 15-byte header)
       final audioData = packet.sublist(15, 15 + length);
-      
-      print('Received audio packet - Seq: $audioSeq, Length: $length bytes');
       return audioData;
       
     } 
     catch (e) {
-      print('Error parsing packet: $e');
       return null;
     }
   }
@@ -256,35 +235,76 @@ class _AudioSenderState extends State<AudioSender> {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ElevatedButton(
-            onPressed: _isTCPConnected ? null : _connectTCP,
-            child: Text(_isTCPConnected ? "Conectado TCP" : "Conectar TCP"),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _isTCPConnected && !_isCallActive ? _startCallAndSendTCP : null,
-            child: const Text("Iniciar Llamada"),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _isCallActive ? _endCallAndSendTCP : null,
-            child: const Text("Finalizar Llamada"),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _isTCPConnected ? _sendOpenCommand : null,
-            child: const Text("Abrir"),
-          ),
-          if (_isCallActive)
-            const Padding(
-              padding: EdgeInsets.only(top: 20),
-              child: Text("Llamada en curso...", style: TextStyle(color: Colors.green)),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFe0eafc), Color(0xFFcfdef3)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Center(
+        child: Card(
+          elevation: 8,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Controles de llamada",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.call, size: 28),
+                      label: const Text("Llamar"),
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      ),
+                      onPressed: !_isCallActive ? _startCallAndSendTCP : null,
+                    ),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.call_end, size: 28),
+                      label: const Text("Colgar"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      ),
+                      onPressed: _isCallActive ? _endCallAndSendTCP : null,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.door_front_door, size: 28),
+                  label: const Text("Abrir puerta"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  ),
+                  onPressed: _sendOpenCommand,
+                ),
+                if (_isCallActive)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 24),
+                    child: Text(
+                      "Llamada en curso...",
+                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
