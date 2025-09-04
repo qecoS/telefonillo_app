@@ -85,10 +85,12 @@ class _AudioSenderState extends State<AudioSender> {
       );
 
       await _player.openPlayer(); // Asegurar que el player esté abierto
-      await _player.startPlayer(
+      await _player.startPlayerFromStream(
         codec: Codec.pcm16,
         numChannels: 1,
         sampleRate: 8000,
+        bufferSize: 324,
+        interleaved: false,
       );
 
       setState(() => _isCallActive = true);
@@ -148,12 +150,13 @@ class _AudioSenderState extends State<AudioSender> {
         }
       });
       // Iniciar temporizador para reproducir audio cada 20ms
-  _audioPlayTimer = Timer.periodic(Duration(milliseconds: audioPlayIntervalMs), (timer) {
-        if (_audioBuffer.isNotEmpty) {
-          // Reproducir el paquete más reciente y vaciar el buffer
-          final toPlay = _audioBuffer.removeLast();
-          _audioBuffer.clear();
-          _player.feedUint8FromStream(toPlay);
+      _audioPlayTimer = Timer.periodic(Duration(milliseconds: audioPlayIntervalMs), (timer) {
+        if (_audioBuffer.isNotEmpty && _player.uint8ListSink != null) {
+          // Reproducir todos los paquetes en orden de llegada
+          while (_audioBuffer.isNotEmpty) {
+            final toPlay = _audioBuffer.removeAt(0);
+            _player.uint8ListSink!.add(toPlay);
+          }
         }
       });
     } catch (e) {
