@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
-// import 'package:permission_handler/permission_handler.dart'; // Ya no se usa
 import 'sync_state.dart';
 
 class AudioSender extends StatefulWidget {
@@ -36,10 +35,8 @@ class _AudioSenderState extends State<AudioSender> {
     _serverIP = widget.serverIp;
     _tcpSocket = widget.tcpSocket;
   }
-  // final int _tcpPort = 12345; // Ya no se usa
   final int _udpPort = 12345;
 
-  // Eliminada la función _connectTCP, ya no es necesaria
 
   Future<void> _startCallAndSendTCP() async {
     if (!_isTCPConnected) {
@@ -59,23 +56,24 @@ class _AudioSenderState extends State<AudioSender> {
       _audioStreamController = StreamController<Uint8List>();
       _audioStreamController!.stream.listen((data) {
         if (_udpSocket != null) {
-          // Empaquetar audio con cabecera igual que el script Python
-          final int packetType = 0; // AUDIO_PACKAGE
+
+          final int packetType = 0;
           final int timestamp = DateTime.now().millisecondsSinceEpoch;
           final int length = data.length;
           final header = BytesBuilder();
+
           header.add([packetType]); // uint8
           header.add(_intToBytes(_audioSeq, 4)); // uint32
           header.add(_intToBytes(timestamp, 8)); // uint64
           header.add(_intToBytes(length, 2)); // uint16
+
           final packet = Uint8List.fromList(header.toBytes() + data);
           _udpSocket!.send(packet, InternetAddress(_serverIP), _udpPort);
           _audioSeq++;
-          print('Enviados ${data.length} bytes por UDP (con cabecera)');
         }
       });
 
-      await _recorder.openRecorder(); // Asegurar que el recorder esté abierto
+      await _recorder.openRecorder();
       await _recorder.startRecorder(
         codec: Codec.pcm16,
         numChannels: 1,
@@ -94,6 +92,7 @@ class _AudioSenderState extends State<AudioSender> {
       );
 
       setState(() => _isCallActive = true);
+
     } catch (e) {
       _showError("Error UDP: ${e.toString()}");
     }
@@ -112,8 +111,9 @@ class _AudioSenderState extends State<AudioSender> {
       _udpSocket?.close();
 
       setState(() => _isCallActive = false);
+
     } catch (e) {
-      print("Error al finalizar: $e");
+      _showError("Error al finalizar: $e");
     }
   }
 
@@ -128,16 +128,17 @@ class _AudioSenderState extends State<AudioSender> {
     }
   }
 
-  
-
   Future<void> _initUDP() async {
     try {
       _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, _udpPort);
       _udpSocket?.listen((event) {
+        // Escuchar eventos de socket UDP
         if (event == RawSocketEvent.read) {
           final datagram = _udpSocket?.receive();
+          // Procesar datagramas recibidos
           if (datagram != null) {
             final audioData = _parseAudioPacket(datagram.data);
+            // Procesar audioData
             if (audioData != null) {
               // Añadir al buffer
               _audioBuffer.add(audioData);
@@ -149,6 +150,7 @@ class _AudioSenderState extends State<AudioSender> {
           }
         }
       });
+      
       // Iniciar temporizador para reproducir audio cada 20ms
       _audioPlayTimer = Timer.periodic(Duration(milliseconds: audioPlayIntervalMs), (timer) {
         if (_audioBuffer.isNotEmpty && _player.uint8ListSink != null) {
@@ -172,7 +174,7 @@ class _AudioSenderState extends State<AudioSender> {
 
   Uint8List? _parseAudioPacket(Uint8List packet) {
     try {
-      // Header structure (15 bytes total):
+      // Estructura de encabezado (15 bytes totales):
       // - packetType: 1 byte (uint8)
       // - audioSeq: 4 bytes (uint32)
       // - timestamp: 8 bytes (uint64) 
@@ -183,22 +185,21 @@ class _AudioSenderState extends State<AudioSender> {
         print('Packet too small: ${packet.length} bytes');
         return null;
       }
-      
-      // Extract header fields
-  final packetType = packet[0];
-  // final audioSeq = _bytesToInt(packet.sublist(1, 5)); // No se usa
-  final timestamp = _bytesToInt(packet.sublist(5, 13));
+
+      // Extraer campos de encabezado
+      final packetType = packet[0];
+      final timestamp = _bytesToInt(packet.sublist(5, 13));
       // Guardar timestamp global para sincronización AV
       lastAudioTimestamp = timestamp;
       final length = _bytesToInt(packet.sublist(13, 15));
-      // Validate packet
+      // Validar paquete
       if (packetType != 0) {
         return null;
       }
       if (packet.length < 15 + length) {
         return null;
       }
-      // Extract audio data (skip 15-byte header)
+      // Extraer datos de audio (omitir encabezado de 15 bytes)
       final audioData = packet.sublist(15, 15 + length);
       return audioData;
       
@@ -217,7 +218,7 @@ class _AudioSenderState extends State<AudioSender> {
     return result;
   }
 
-  // Utilidad para convertir int a bytes little-endian
+  // Utilidad para convertir int a bytes (little-endian)
   List<int> _intToBytes(int value, int bytes) {
     final result = <int>[];
     for (int i = 0; i < bytes; i++) {

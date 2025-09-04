@@ -33,6 +33,7 @@ class _WifiProvisionScreenState extends State<WifiProvisionScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List<dynamic> nets = data['networks'] ?? [];
+
         networks = nets.map((e) => Map<String, dynamic>.from(e)).toList();
         // Ordenar por RSSI
         networks.sort((a, b) => (b['rssi'] ?? -100).compareTo(a['rssi'] ?? -100));
@@ -55,8 +56,10 @@ class _WifiProvisionScreenState extends State<WifiProvisionScreen> {
       final url = Uri.parse('http://192.168.4.1/config');
       final body = json.encode({ 'ssid': selectedSsid, 'password': password });
       final response = await http.post(url, body: body, headers: {'Content-Type': 'application/json'}).timeout(const Duration(seconds: 30));
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+
         if (data['success'] == true) {
           setState(() { provisionMsg = '¡Aprovisionamiento exitoso!'; });
         } else {
@@ -67,6 +70,7 @@ class _WifiProvisionScreenState extends State<WifiProvisionScreen> {
       }
     } catch (e) {
       setState(() { provisionMsg = 'Error: $e'; });
+      
     } finally {
       setState(() { isLoading = false; });
     }
